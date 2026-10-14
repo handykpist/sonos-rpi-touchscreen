@@ -4,6 +4,12 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Guard against duplicate launches: kiosk should only run once
+if pgrep -af "chromium.*127.0.0.1:5000|kiosk.*127.0.0.1:5000" >/dev/null 2>&1; then
+    echo "[*] Sonos touchscreen kiosk already running."
+    exit 0
+fi
+
 # 1. Start Python server if not already running
 if ! pgrep -f "server.py" >/dev/null 2>&1; then
     echo "[*] Starting Sonos Touchscreen backend server..."

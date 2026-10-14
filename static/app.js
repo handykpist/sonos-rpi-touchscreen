@@ -24,6 +24,8 @@ const pauseIcon = document.getElementById("pause-icon");
 const volFill = document.getElementById("vol-fill");
 const volPercent = document.getElementById("vol-percent");
 const volTrack = document.getElementById("vol-track");
+const searchInput = document.getElementById("global-search");
+const searchResults = document.getElementById("global-search-results");
 
 // Drawers & Modals
 const roomModal = document.getElementById("room-modal");
@@ -36,6 +38,30 @@ const nightDimmer = document.getElementById("night-dimmer");
 const nightClock = document.getElementById("night-clock");
 const nightDate = document.getElementById("night-date");
 const nightTrackMini = document.getElementById("night-track-mini");
+
+function bindTouchHandler(element, handler, delay = 220) {
+    if (!element) return;
+    let touched = false;
+    element.addEventListener("touchstart", (event) => {
+        touched = true;
+        handler(event);
+        setTimeout(() => {
+            touched = false;
+        }, delay);
+    }, { passive: true });
+    element.addEventListener("click", (event) => {
+        if (touched) return;
+        handler(event);
+    });
+}
+
+function debounce(fn, delay = 300) {
+    let timer = null;
+    return (...args) => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+    };
+}
 
 // 1. Clock Updates
 function updateClock() {
@@ -167,9 +193,9 @@ async function postAction(endpoint, body = {}) {
     }
 }
 
-document.getElementById("btn-playpause").addEventListener("click", () => postAction("/api/playpause"));
-document.getElementById("btn-next").addEventListener("click", () => postAction("/api/next"));
-document.getElementById("btn-prev").addEventListener("click", () => postAction("/api/prev"));
+bindTouchHandler(document.getElementById("btn-playpause"), () => postAction("/api/playpause"));
+bindTouchHandler(document.getElementById("btn-next"), () => postAction("/api/next"));
+bindTouchHandler(document.getElementById("btn-prev"), () => postAction("/api/prev"));
 
 // 5. Volume Controls & Debounce
 function setVolumeDirect(vol) {
@@ -183,19 +209,19 @@ function setVolumeDirect(vol) {
     }, 120);
 }
 
-document.getElementById("btn-vol-down").addEventListener("click", () => {
+bindTouchHandler(document.getElementById("btn-vol-down"), () => {
     isAdjustingVolume = true;
     const cur = currentState ? currentState.volume : 20;
     setVolumeDirect(cur - 3);
 });
 
-document.getElementById("btn-vol-up").addEventListener("click", () => {
+bindTouchHandler(document.getElementById("btn-vol-up"), () => {
     isAdjustingVolume = true;
     const cur = currentState ? currentState.volume : 20;
     setVolumeDirect(cur + 3);
 });
 
-document.getElementById("btn-mute").addEventListener("click", () => postAction("/api/mute"));
+bindTouchHandler(document.getElementById("btn-mute"), () => postAction("/api/mute"));
 
 volTrack.addEventListener("click", (e) => {
     isAdjustingVolume = true;
@@ -221,7 +247,7 @@ progressTrack.addEventListener("click", (e) => {
 });
 
 // 7. Room Selector Modal
-document.getElementById("btn-room-select").addEventListener("click", async () => {
+bindTouchHandler(document.getElementById("btn-room-select"), async () => {
     try {
         const res = await fetch("/api/speakers");
         const data = await res.json();
@@ -233,7 +259,7 @@ document.getElementById("btn-room-select").addEventListener("click", async () =>
                 <span>${spk.name}</span>
                 <span style="font-size: 13px; color: ${spk.active ? '#38bdf8' : '#64748b'}">${spk.active ? 'Active' : 'Switch'}</span>
             `;
-            item.addEventListener("click", () => {
+            bindTouchHandler(item, () => {
                 postAction("/api/speaker", { room: spk.name });
                 roomModal.classList.remove("open");
             });
@@ -245,12 +271,12 @@ document.getElementById("btn-room-select").addEventListener("click", async () =>
     }
 });
 
-document.getElementById("btn-close-room-modal").addEventListener("click", () => {
+bindTouchHandler(document.getElementById("btn-close-room-modal"), () => {
     roomModal.classList.remove("open");
 });
 
 // 8. Sonos Radio & Favorites Drawer
-document.getElementById("btn-favorites-toggle").addEventListener("click", async () => {
+bindTouchHandler(document.getElementById("btn-favorites-toggle"), async () => {
     favoritesDrawer.classList.add("open");
     try {
         const res = await fetch("/api/favorites");
@@ -267,7 +293,7 @@ document.getElementById("btn-favorites-toggle").addEventListener("click", async 
                 <img class="fav-art" src="${fav.art || ''}" onerror="this.style.display='none'">
                 <div class="fav-title">${fav.title}</div>
             `;
-            card.addEventListener("click", () => {
+            bindTouchHandler(card, () => {
                 postAction("/api/favorite/play", { uri: fav.uri, meta: fav.meta });
                 favoritesDrawer.classList.remove("open");
             });
@@ -278,17 +304,17 @@ document.getElementById("btn-favorites-toggle").addEventListener("click", async 
     }
 });
 
-document.getElementById("btn-close-favorites").addEventListener("click", () => {
+bindTouchHandler(document.getElementById("btn-close-favorites"), () => {
     favoritesDrawer.classList.remove("open");
 });
 
 // 9. Synchronized Lyrics Drawer
-document.getElementById("btn-lyrics-toggle").addEventListener("click", () => {
+bindTouchHandler(document.getElementById("btn-lyrics-toggle"), () => {
     lyricsDrawer.classList.add("open");
     if (currentLyrics.length === 0) loadLyrics();
 });
 
-document.getElementById("btn-close-lyrics").addEventListener("click", () => {
+bindTouchHandler(document.getElementById("btn-close-lyrics"), () => {
     lyricsDrawer.classList.remove("open");
 });
 
@@ -335,8 +361,73 @@ function updateLyricsHighlight(curTime) {
     }
 }
 
-// 10. Night / Sleep Dimmer Screen
-document.getElementById("btn-night-mode").addEventListener("click", () => {
+// 10. Search functionality
+function renderSearchResults(results) {
+    if (!searchResults) return;
+    if (!results || results.length === 0) {
+        searchResults.innerHTML = "<div class='search-empty'>No results</div>";
+        searchResults.classList.remove("hidden");
+        return;
+    }
+
+    searchResults.innerHTML = results.map((item) => `
+        <button class="search-result-item" type="button" data-uri="${encodeURIComponent(item.uri || '')}" data-meta="${encodeURIComponent(item.meta || '')}">
+            <span class="search-result-type">${(item.type || 'track').toUpperCase()}</span>
+            <span class="search-result-text">${item.title || 'Untitled'}${item.artist ? ` — ${item.artist}` : ''}</span>
+        </button>
+    `).join('');
+
+    searchResults.classList.remove("hidden");
+    searchResults.querySelectorAll(".search-result-item").forEach((btn) => {
+        bindTouchHandler(btn, () => {
+            const uri = decodeURIComponent(btn.dataset.uri || '');
+            const meta = decodeURIComponent(btn.dataset.meta || '');
+            if (uri) {
+                postAction("/api/favorite/play", { uri, meta });
+            }
+            searchResults.classList.add("hidden");
+            searchInput.value = "";
+        });
+    });
+}
+
+const searchLibrary = debounce(async (query) => {
+    const clean = (query || '').trim();
+    if (!clean) {
+        searchResults.classList.add("hidden");
+        searchResults.innerHTML = "";
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(clean)}`);
+        if (!res.ok) throw new Error('search failed');
+        const data = await res.json();
+        renderSearchResults(data.results || []);
+    } catch (e) {
+        searchResults.innerHTML = "<div class='search-empty'>Search unavailable</div>";
+        searchResults.classList.remove("hidden");
+    }
+}, 250);
+
+if (searchInput) {
+    searchInput.addEventListener('input', (event) => {
+        searchLibrary(event.target.value);
+    });
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value.trim()) {
+            searchResults.classList.remove("hidden");
+        }
+    });
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.global-search-input') && !event.target.closest('.search-result-item')) {
+            searchResults.classList.add("hidden");
+        }
+    });
+}
+
+// 11. Night / Sleep Dimmer Screen
+bindTouchHandler(document.getElementById("btn-night-mode"), () => {
     nightDimmer.classList.add("active");
 });
 

@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=%h/.Xauthority
+ExecStartPre=/bin/bash -lc 'pgrep -af "chromium.*127.0.0.1:5000|server.py" || true'
 ExecStart=%h/.local/share/sonos-touchscreen/kiosk/launch_kiosk.sh
 WorkingDirectory=%h/.local/share/sonos-touchscreen
 Restart=always

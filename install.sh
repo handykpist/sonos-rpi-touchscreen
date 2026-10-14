@@ -27,11 +27,13 @@ cp -r "$SCRIPT_DIR/kiosk" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/kiosk/launch_kiosk.sh"
 chmod +x "$INSTALL_DIR/kiosk/setup_screen.sh"
 
-# 3. Create Desktop Entry
+# 3. Create Desktop Entry (optional; use systemd user service as the single startup source)
 mkdir -p "$HOME/.local/share/applications"
 mkdir -p "$HOME/.local/bin"
 ln -sfn "$INSTALL_DIR/kiosk/launch_kiosk.sh" "$HOME/.local/bin/sonos-touchscreen"
 
+# Create only a launcher icon, not an explicit autostart desktop entry.
+# The systemd user service is the canonical startup mechanism.
 DESKTOP_FILE="$HOME/.local/share/applications/sonos-touchscreen.desktop"
 cat << EOF > "$DESKTOP_FILE"
 [Desktop Entry]
